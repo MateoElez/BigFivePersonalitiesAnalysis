@@ -1,0 +1,860 @@
+---
+title: "projektBigFive"
+author: "Homo SAPiens"
+date: "12/16/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+__UVOD__
+
+Tema našeg projekta je analiza "Velikih 5 dimenzija ličnosti", tzv. "Big Five Personality test".
+Podatke koje imamo nastali su ispitivanjem više od 300 000 ljudi diljem svijeta pomoću poznatog psihološkog testa koji je dostupan svima na internetu.
+Na temelju tog testa dobijemo vrijednosti 5 koeficijenata ličnosti. Test se provodi uzimajući u obzir da su koeficijenti neovisni jedni o drugima. 
+Pet koeficijenata koji se ispituju su: 
+  1) otvorenost prema novim iskustvima
+  2) neuroticizam
+  3) savjesnost
+  4) ugodnost
+  5) ekstraverzija
+  
+__OPIS SKUPA PODATAKA__
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Najprije učitamo potrebne pakete.
+
+```{r echo=T, error=FALSE, warning=FALSE, message=FALSE}
+library(dplyr)
+
+```
+
+Zatim učitamo podatke iz .csv filea.
+
+```{r}
+bigFiveData = read.csv("./big_five_scores.csv")
+dim(bigFiveData)
+```
+
+Podaci se sastoje od 307 313 testiranih ljudi i 9 varijabli koje promatramo.
+Varijable koje promatramo navedene su u nastavku.
+
+```{r}
+names(bigFiveData)
+```
+
+Za testirane sudionike u tablici navedeni su njihovi podaci (godine, zemlja i spol) te 5 faktora koje promatramo (ekstroverzija, ugodnost, savjesnost, neuroticizam i otvorenost prema novim iskustvima)
+
+Možemo promotriti kako se ponašaju varijable.
+
+```{r}
+summary(bigFiveData)
+```
+
+```{r}
+sapply(bigFiveData, class)
+```
+
+Vidimo iz priloženog tip podataka navedenih varijabli. Zemlja je zadana kao string, dok su ostale varijable brojčane (int ili numeric). Svi faktori koje promatramo su numeric tipa i imaju vrijednosti od 0 do 1.
+
+Sada gledamo postoje li u našem skupu podataka nedostajuće (NA) vrijednosti jer one mogu poremetiti rezultate testa. Promatramo sve varijable i prebrojimo koliko je NA vrijednosti, ako ih ima.
+
+```{r}
+for (col_name in names(bigFiveData)){
+  if (sum(is.na(bigFiveData[,col_name])) > 0){
+    cat('Ukupno nedostajućih vrijednosti za varijablu ',col_name, ': ', sum(is.na(bigFiveData[,col_name])),'\n')
+  }
+}
+```
+
+Po rezultatima vidimo da nemamo NA vrijednosti u skupu podataka, dakle podaci su konzistentni.
+
+Sada kad smo pregledali podatke koje imamo, možemo krenuti na testiranje hipoteza.
+
+
+__T-test: Ovisnost koeficijenta otvorenosti o starosti ispitanika__
+
+Ako grupiramo ispitanike na mlade i stare, možemo li vidjeti značajnu razliku u otvorenosti prema novim iskustvima?
+
+pretpostavka:
+
+Postavljamo hipoteze:
+
+$$ \begin{aligned}
+  H_0 & : \mu_m = \mu_s\\
+  H_1 & : \mu_m > \mu_s
+\end{aligned} $$
+
+Ovdje ćemo koristiti jednostrani t-test za testiranje.
+
+T-test za prepostavku uzima normalnost podataka pa prije početka testiranja moramo pokazati normalnost.
+
+Ispitanike ćemo podijeliti na dvije skupine: mlade (do 35 godina) i stare (od 35 godina) te ćemo pronaći srednju vrijednost koeficijenta otvorenosti.
+
+
+```{r}
+young_people = bigFiveData[which(bigFiveData$age <= 35),]
+old_people = bigFiveData[which(bigFiveData$age > 35),]
+```
+```{r}
+cat('Prosječna ocjena otvorenosti mladih ljudi iznosi ', mean(young_people$openness_score), '\n')
+cat('Prosječna ocjena otvorenosti starih ljudi iznosi ', mean(old_people$openness_score), '\n')
+```
+
+Vidimo da se aritmetičke sredine samo malo razlikuju. Nacrtat ćemo boxplot za bolju predodžbu. 
+
+```{r}
+boxplot(young_people$openness_score, old_people$openness_score,
+        names = c('Young people openness score', 'Old people openness score'),
+        main = 'Boxplot of young and old people openness score')
+```
+Sada provjeravamo normalnost podataka. Najprije crtamo histograme za obje grupe.
+
+```{r}
+hist(young_people$openness_score, main='Young people openness score', xlab='Openness score', ylab='Frequency')
+```
+```{r}
+hist(old_people$openness_score, main='Old people openness score', xlab='Openness score', ylab='Frequency')
+```
+Iz histograma možemo pretpostaviti da su razdiobe normalne, no radimo i Lilliefors test.
+
+```{r}
+nortest::lillie.test(young_people$openness_score)
+nortest::lillie.test(old_people$openness_score)
+```
+Lilliefors test osjetljiv je na veliku količinu podataka pa dobivamo jako male p-vrijednosti. Za daljnju provjeru normalnosti crtamo Q-Q plot.
+
+```{r}
+qqnorm(young_people$openness_score, main = 'Young people openness score')
+qqline(young_people$openness_score, col = 'mediumblue')
+```
+
+```{r}
+qqnorm(old_people$openness_score, main = 'Old people openness score')
+qqline(old_people$openness_score, col = 'mediumblue')
+```
+
+Zaključujemo da se radi o normalnim razdiobama.
+
+Zatim provjeravamo jednakost varijanci dvaju uzoraka kako bismo mogli provesti prikladni test. Radimo test o jednakosti varijanci.
+
+```{r}
+var.test(young_people$openness_score, old_people$openness_score)
+```
+Dobili smo da je p-vrijednost jako mala, što znači da možemo odbaciti hipotezu H0 da su varijance jednake.
+
+Provedimo sada t-test na podatcima.
+
+```{r}
+t.test(young_people$openness_score, old_people$openness_score, alt = "greater", var.equal = FALSE)
+```
+
+Iz testa vidimo da je p-vrijednost manja od 0.05 pa možemo odbaciti hipotezu H0 da su mlađi i stariji ljudi jednako otvoreni prema novim iskustvima u korist hipoteze H1 koja kaže da su mlađi ljudi otvoreniji prema novim iskustvima.
+
+__T-test: Usporedba koeficijenta ekstraverzije SAD-a i ostatka svijeta__
+
+Jesu li ljudi u SAD-u ekstravertiraniji nego u ostatku svijeta?
+
+$$ \begin{aligned}
+  H_0 & : \mu_S = \mu_O\\
+  H_1 & : \mu_S > \mu_O
+\end{aligned} $$
+
+Jednako kao u prošlom primjeru, provest ćemo jednostrani t-test na podacima, no prije ćemo provjeriti normalnost podataka.
+Najprije ćemo podijeliti ispitanike na one iz SAD-a i ostale te ćemo naći aritmetičke sredine za koeficijent ekstraverzije.
+
+```{r}
+Americans = bigFiveData[which(bigFiveData$country == 'USA'),]
+Others = bigFiveData[which(bigFiveData$country != 'USA'),]
+```
+```{r}
+cat('Prosječni koeficijent ekstraverzije kod Amerikanaca iznosi ', mean(Americans$extraversion_score), '\n')
+cat('Prosječni koeficijent ekstraverzije u ostatku svijeta ', mean(Others$extraversion_score), '\n')
+```
+Vidimo da se rezultati ne razlikuju značajno, što grafički prikazujemo boxplotom.
+
+```{r}
+boxplot(Americans$extraversion_score, Others$extraversion_score,
+        names = c('Americans extraversion score', 'Other people extraversion score'),
+        main = 'Boxplot of extraversion score in USA and other countries')
+```
+
+Sada provjeravamo normalnost podataka, stoga najprije crtamo histogram.
+
+```{r}
+hist(Americans$extraversion_score, main='Americans extraversion score', xlab='Extraversion score', ylab='Frequency')
+```
+```{r}
+hist(Others$extraversion_score, main='Others extraversion score', xlab='Extraversion score', ylab='Frequency')
+```
+Podaci su naizgled normalni, no radimo i Lilliefors test gdje očekujemo male p-vrijenosti jednako kao i u prošlom testu.
+
+```{r}
+nortest::lillie.test(Americans$extraversion_score)
+nortest::lillie.test(Others$extraversion_score)
+```
+Potvrdili smo pretpostavku malih p-vrijednosti zbog velikog skupa podataka. Nastavljamo s provjerom normalnosti crtajući Q-Q plot.
+
+```{r}
+qqnorm(Americans$extraversion_score, main = 'Americans extraversion score')
+qqline(Others$extraversion_score, col = 'mediumblue')
+```
+```{r}
+qqnorm(Others$extraversion_score, main = 'Others extraversion score')
+qqline(Others$extraversion_score, col = 'mediumblue')
+```
+
+Iz dosadašnjih rezultata zaključujemo da su podaci normalni.
+
+Zatim provjeravamo jednakost varijanci dvaju uzoraka kako bismo mogli provesti prikladni test. Radimo test o jednakosti varijanci.
+
+```{r}
+var.test(Americans$extraversion_score, Others$extraversion_score)
+```
+
+Zbog jako male p-vrijednosti možemo odbaciti hipotezu H0 da su varijance jednake.
+
+Naposlijetku provodimo t-test na podacima.
+
+```{r}
+t.test(Americans$extraversion_score, Others$extraversion_score, alt = "greater", var.equal = FALSE)
+```
+
+Vidimo da je p-vrijednost jako mala, zbog čega možemo odbaciti hipotezu H0 i zaključiti u korist H1 da su ljudi u SAD-u ekstravertiraniji od ostatka svijeta.
+
+
+__ANOVA test: Usporedba savjesnosti i populacije u pojedinim regijama__
+  
+Imaju li neke regije značajno različite rezultate koeficijenta savjesnosti? Primjerice, je li opravdan mit o
+visokoj savjesnosti populacije istočne Azije naspram populacija drugih kontinenata?
+
+U ovom odjeljku ćemo provesti ANOVA test varijanci na temelju sljedećih hipoteza, gdje su indeksi oznake pojedinih regija: A - Azija i Pacifik, E - Europa i N- Sjeverna Amerika 
+$$ \begin{aligned}
+  H_0 & : \mu_A = \mu_E = \mu_N \\
+  H_1 & : \neg H_0.
+\end{aligned} $$
+
+Također, nakon provedene jednofaktorske ANOVE provest ćemo i post hoc test i provjeriti tvrdnju da je populacija
+istočne Azije savjesnija od ostatka populacije. 
+
+Učitavamo potrebne pakete za test.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(tidyverse)
+library(broom)
+library(AICcmodavg)
+library(tidyverse)
+require(nortest)
+```
+
+
+Zatim ćemo grupirati ispitanike u određene regije. U skladu s gornjim ispisom i brojem rezultata u pojedinim zemljama, odlučili smo zemlje grupirati u regije te uzeti samo dio podataka u zemljama koje imaju previše podataka u odnosu na druge. Regije su: Europa, Azija i Pacifik te Europa.
+
+Zemlje u pojedinim regijama su:
+  Azija i Pacifik - Australija, Indija, Novi Zeland, Filipini, Singapur, Tajland
+  Europa - Njemačka, Finska, Irska, Nizozemska, UK
+  Sjeverna Amerika - Kanada, SAD
+  
+```{r}
+groupedData = select(bigFiveData, c('conscientiousness_score', 'country'))
+
+groupedData$'Region' <- as.factor(ifelse(groupedData$country == "Australia" | groupedData$country == "India" | groupedData$country == "New Zealan" | groupedData$country == "Philippine" | groupedData$country == "Singapore"| groupedData$country == "Thailand", 'Asia & Pacific',
+                                  ifelse(groupedData$country == "Germany" | groupedData$country == "Finland" | groupedData$country == "Ireland" | groupedData$country == "Netherland" | groupedData$country == "UK", 'Europe', 
+                                  ifelse(groupedData$country == "Canada" | groupedData$country == "USA", 'North America',NA))))
+
+summary(bigFiveData)
+
+groupedData = select(groupedData, c('conscientiousness_score', 'Region'))
+
+groupedData = filter(groupedData, (Region == "Asia & Pacific" | Region == "Europe" | Region == "North America" | Region == "Asia & Pacific"))
+groupedData = filter(groupedData, Region != 'Other' &  conscientiousness_score != 'Other')
+ 
+groupedData = groupedData[order(groupedData$Region),]
+groupedData = groupedData[0:72334,]
+
+summary(groupedData)
+
+
+```
+
+ANOVA test pretpostavlja normalnost podataka, koju ćemo sada ispitati.
+Računamo ANOVU kako bi imali reziduale, te ćemo pomoću njih provjeriti jednakost varijanci i provjeriti normalnost prije provođenja ANOVA
+
+Proveravamo normalnost za koeficijent normalnosti:
+```{r}
+lillie.test(groupedData$conscientiousness_score)
+
+test = groupedData[0:3000,]
+lillie.test(test$conscientiousness_score)
+```
+Vidimo da dobijemo veću p-vrijednost kad je u pitanju manja količina podataka.
+Zatim za Aziju: 
+```{r}
+lillie.test(groupedData$conscientiousness_score[groupedData$Region=='Asia & Pacific'])
+```
+
+Za Sjevernu Ameriku:
+```{r}
+lillie.test(groupedData$conscientiousness_score[groupedData$Region=='North America'])
+```
+
+Za Europu:
+```{r}
+lillie.test(groupedData$conscientiousness_score[groupedData$Region=='Europe'])
+```
+
+Zatim crtamo histogram kako bismo grafički odredili normalnost.
+
+```{r}
+hist(groupedData$conscientiousness_score[groupedData$Region=='Europe'],  main='Europe conscientiousness score', xlab='Conscientiousness score', ylab='Frequency')
+```
+```{r}
+hist(groupedData$conscientiousness_score[groupedData$Region=='North America'], main='North America conscientiousness score', xlab='Conscientiousness score', ylab='Frequency')
+```
+```{r}
+hist(groupedData$conscientiousness_score[groupedData$Region=='Asia & Pacific'], main='Asia & Pacific conscientiousness score', xlab='Conscientiousness score', ylab='Frequency')
+```
+
+
+Sada ćemo testirati homogenost varijanci regija Barlettovim testom.
+
+```{r}
+bartlett.test(groupedData$conscientiousness_score ~ groupedData$Region)
+
+var((groupedData$conscientiousness_score[groupedData$Region=='Europe']))
+var((groupedData$conscientiousness_score[groupedData$Region=='North America']))
+var((groupedData$conscientiousness_score[groupedData$Region =='Asia & Pacific']))
+#
+```
+Iz testa homogenosti koji je nužan za ANOVA-u možemo zaključiti da varijance nisu homogene, no opet uzevši u obzir 
+količinu podataka i p vrijednost testa homogenosti, smatrat ćemo varijance homogene.
+
+Podatke ćemo prikazati i pomoću boxplota.
+```{r}
+
+boxplot(groupedData$conscientiousness_score ~ (groupedData$Region))
+```
+
+Na temelju grafa pretpostavljamo da nulta hipoteza ne vrijedi. Konačno, provodimo ANOVA test.
+
+#ANOVA test
+
+```{r}
+an = aov(groupedData$conscientiousness_score ~ (groupedData$Region))
+summary(an)
+```
+
+Iz podataka vidimo da hipoteza H0 ne vrijedi, već na gornjem grafu smo uočili razliku.
+
+#Post hoc Dunnett's test
+
+```{r}
+library(DescTools)
+DunnettTest(x=groupedData$conscientiousness_score, g=groupedData$Region)
+```
+
+Iz navedenog vidimo da je populacija Azije manje savjesna od populacije Sjeverne Amerike.
+
+
+__LOGISTIČKA REGRESIJA_: Razlike u karakteristikama prema spolu_
+
+Postoje li razlike u karakteristikama prema spolu ispitanika? Možemo li temeljem nekih drugih varijabli odrediti spol ispitanika?
+
+Prvi dio hipoteze potoje li razlike u karektaristikama prema spolu ćemo razmotriti tako što ćemo primjerice uzet u obzir karekteristike neuroticizam i otvorenost. 
+Prvo ćemo prikazati histograme.
+
+```{r}
+bigFiveData$`standardized_sex` <- bigFiveData$sex-1
+w = bigFiveData[which(bigFiveData$standardized_sex == 1),]
+m = bigFiveData[which(bigFiveData$standardized_sex == 0),]
+
+hist(m$`openness_score`, main='Women opennes score', xlab='Opennes score', ylab='Frequency')
+hist(w$`openness_score`, main='Men opennes score', xlab='Opennes score', ylab='Frequency')
+
+hist(m$`neuroticism_score`, main='Women neuroticism score', xlab='Neuroticism score', ylab='Frequency')
+hist(w$`neuroticism_score`, main='Men neuroticism score', xlab='Neuroticism score', ylab='Frequency')
+
+hist(m$`extraversion_score`, main='Women extraversion score', xlab='Extraversion score', ylab='Frequency')
+hist(w$`extraversion_score`, main='Men extraversion score', xlab='Extraversion score', ylab='Frequency')
+
+hist(m$`conscientiousness_score`, main='Women conscientiousness score', xlab='Conscientiousness score', ylab='Frequency')
+hist(w$`conscientiousness_score`, main='Men conscientiousness score', xlab='Conscientiousness score', ylab='Frequency')
+
+hist(m$`agreeable_score`,main='Women agreeable score', xlab='Agreeable score', ylab='Frequency')
+hist(w$`agreeable_score`, main='Man agreeable score', xlab='Agreeable score', ylab='Frequency')
+```
+
+Iz histograma se čini da su razdiobe normalne. Crtamo i Q-Q dijagram.
+
+```{r}
+qqnorm(m$`openness_score`, main = 'Man openess score')
+qqline(m$`openness_score`, col = "medium blue")
+```
+
+```{r}
+qqnorm(w$`openness_score`, main='Women openess score ')
+qqline(w$`openness_score`, col = "medium blue ")
+```
+
+```{r}
+qqnorm(m$`neuroticism_score`, main='Men neuroticism score ')
+qqline(m$`neuroticism_score`, col = "medium blue")
+
+```
+
+```{r}
+qqnorm(w$`neuroticism_score`, main='Women neuroticism score')
+qqline(w$`neuroticism_score`, col = "medium blue ")
+```
+
+```{r}
+qqnorm(m$`extraversion_score`, main='Men extraversion score ')
+qqline(m$`extraversion_score`, col = "medium blue ")
+```
+```{r}
+qqnorm(w$`extraversion_score`, main='Women extraversion score')
+qqline(w$`extraversion_score`, col = "medium blue ")
+```
+
+```{r}
+qqnorm(m$`conscientiousness_score`, main='Men conscientiousness score')
+qqline(m$`conscientiousness_score`, col = "medium blue ")
+```
+```{r}
+qqnorm(w$`conscientiousness_score`, main='Women conscientiousness score ')
+qqline(w$`conscientiousness_score`, col = "medium blue ")
+```
+```{r}
+qqnorm(m$`agreeable_score`, main='Men agreeable score ')
+qqline(m$`agreeable_score`, col = "medium blue ")
+```
+
+```{r}
+qqnorm(w$`agreeable_score`, main='Women agreeable score ')
+qqline(w$`agreeable_score`, col = "medium blue ")
+```
+
+Q-Q plotovi ukazuju na normalnost razdioba.
+Provjerit ćemo još normalnost pomoću Lilliefors testa.
+
+```{r}
+nortest::lillie.test(w$openness_score)
+nortest::lillie.test(m$openness_score)
+
+nortest::lillie.test(w$neuroticism_score)
+nortest::lillie.test(m$neuroticism_score)
+
+nortest::lillie.test(w$extraversion_score)
+nortest::lillie.test(m$extraversion_score)
+
+nortest::lillie.test(w$conscientiousness_score)
+nortest::lillie.test(m$conscientiousness_score)
+
+nortest::lillie.test(w$agreeable_score)
+nortest::lillie.test(m$agreeable_score)
+```
+I ovdje vidimo da je Lilliefors osjetljiv na veliku količinu podataka
+Provest cemo t-test za otvorenost:
+H0: Muškarci su jednako otvoreni kao i žene odnosno ne postoji razlika u otvorenosti kod muškaraca i žena.
+
+```{r}
+var.test(w$`openness_score`, m$`openness_score`)
+
+t.test(w$`openness_score`, m$`openness_score`, 
+       alt = "greater", var.equal = TRUE)
+```
+
+Provest cemo t-test i za neuroticnost:
+H0: Muškarci su jednako neurotični kao i žene odnosno ne postoji razlika u neurotičnosti kod muškaraca i žena.
+
+```{r}
+var.test(w$`neuroticism_score`, m$`neuroticism_score`)
+t.test(w$`neuroticism_score`, m$`neuroticism_score`, 
+       alt = "greater", var.equal = TRUE)
+```
+
+Provest cemo t-test za savjesnost:
+H0: Muškarci su jednako savjesni kao i žene odnosno ne postoji razlika u savjesnosti kod muškaraca i žena.
+
+```{r}
+var.test(w$`conscientiousness_score`, m$`conscientiousness_score`)
+
+t.test(w$`conscientiousness_score`, m$`conscientiousness_score`, 
+       alt = "greater", var.equal = TRUE)
+```
+
+Provest cemo t-test za ekstraverziju:
+H0: Muškarci su jednako ekstravertni kao i žene odnosno ne postoji razlika u ekstraverziji kod muškaraca i žena.
+
+```{r}
+var.test(w$`extraversion_score`, m$`extraversion_score`)
+
+t.test(w$`extraversion_score`, m$`extraversion_score`, 
+       alt = "greater", var.equal = TRUE)
+```
+
+Provest cemo t-test za ugodnost:
+H0: Muškarci su jednako ugodni kao i žene odnosno ne postoji razlika  kod muškaraca i žena.
+
+```{r}
+var.test(w$`agreeable_score`, m$`agreeable_score`)
+
+t.test(w$`agreeable_score`, m$`agreeable_score`, 
+       alt = "greater", var.equal = TRUE)
+```
+
+Vidimo da je p-vrijednost jako mala stoga možemo zaključiti da postoje razlike u karakteristikama kod muškaraca, odnosno kod žena.
+
+Nastavno na gore provedene testove, prirodno se nameće pitanje, možemo li na osnovu ocjene karakteristika odrediti spol.Prvo ćemo pogledati prosječne ocjene karakteristika kod žena odnosno kod muškaraca.
+```{r}
+bigFiveData$`standardized_sex` <- bigFiveData$sex-1
+w = bigFiveData[which(bigFiveData$standardized_sex == 1),]
+m = bigFiveData[which(bigFiveData$standardized_sex == 0),]
+
+cat('Prosječna ocjena otvorenosti žena je ', mean(w$openness_score), '\n')
+cat('Prosječna ocjena otvornosti muškaraca je ', mean(m$openness_score), '\n')
+
+
+cat('Prosječna ocjena neuroticizma žena je ', mean(w$neuroticism_score), '\n')
+cat('Prosječna ocjena neuroticizma muškaraca je ', mean(m$neuroticism_score), '\n')
+
+cat('Prosječna ocjena ekstraverzije žena je ', mean(w$extraversion_score), '\n')
+cat('Prosječna ocjena ekstraverzije muškaraca je ', mean(m$extraversion_score), '\n')
+
+cat('Prosječna ocjena slaganja žena je ', mean(w$agreeable_score), '\n')
+cat('Prosječna ocjena slaganja muškaraca je ', mean(m$agreeable_score), '\n')
+
+cat('Prosječna ocjena savjesnosti žena je ', mean(w$conscientiousness_score), '\n')
+cat('Prosječna ocjena savjesnosti muškaraca je ', mean(m$conscientiousness_score), '\n')
+```
+Iz ovoga vidimo da postoje razlike izmedju muškaraca i žena, ne toliko velike, ali postoje. Provodimo logističku regresiju:
+```{r}
+logreg_model = glm(standardized_sex ~ neuroticism_score + openness_score + extraversion_score + conscientiousness_score + agreeable_score , data=bigFiveData, family = binomial())
+summary(logreg_model)
+yHat <- logreg_model$fitted.values > 0.5
+conf_table <- table(bigFiveData$standardized_sex, yHat)
+
+conf_table
+
+cat("Accuracy: ", sum(diag(conf_table)) / sum(conf_table), "\n")
+cat("Precision: ", conf_table[2,2] / sum(conf_table[,2]),"\n")
+cat("Recall: ", conf_table[2,2] / sum(conf_table[2,]),"\n")
+cat("Specificity: ", conf_table[1,1] / sum(conf_table[,1]),"\n")
+
+cat("\nRsq: ", 1 - logreg_model$deviance/logreg_model$null.deviance)
+
+```
+
+__LINEARNA REGRESIJA: Ovisnost dobi o faktorima koje imamo na raspolaganju__
+
+U posljednjem testu promatrat ćemo varijablu dobi (starosti) i uspoređivati ju sa svih 5 faktora koje ispitujemo. Prvo ćemo vidjeti povezanost dobi sa svim tim faktorima, nakon čega ćemo izabrati jedan na kojem ćemo raditi linearnu regresiju te na temelju tog faktora pokušati odrediti dob ispitanika.
+
+Pa krenimo s testiranjem. Za početak ćemo podijeliti varijablu dobi, koja je numerička, na kategorije: mlađi (0-15 godina), srednje dobi (16-30 godina) i starije (30+ godina)..
+
+```{r}
+young = bigFiveData[which(bigFiveData$age <= 15),]
+middle = bigFiveData[which(bigFiveData$age > 15 & bigFiveData$age <= 30),]
+old = bigFiveData[which(bigFiveData$age > 30),]
+```
+
+Nakon što smo podijelili podatke o dobi na kategorije izračunati ćemo prosječne srednje vrijednosti, prikazati box plotove, te scatter plotove s regresijskom linijom i na temelju tih svih podataka zaključiti koji je faktor najpovezaniji s dobi. 
+S izabranim faktorom napravit ćemo linearnu regresiju te na temelju rezultata tog faktora pokušati odrediti dob.
+
+Prvo ćemo napraviti linearne modele za svaki faktor da bi mogli "nacrtati" liniju na scatter plotu.
+```{r}
+fit.opennes = lm(age~openness_score,data=bigFiveData)
+fit.extraversion = lm(age~extraversion_score,data=bigFiveData)
+fit.agreeable = lm(age~agreeable_score,data=bigFiveData)
+fit.conscientiousness = lm(age~conscientiousness_score,data=bigFiveData)
+fit.neuroticism = lm(age~neuroticism_score,data=bigFiveData)
+```
+
+EKsTRAVERZIJA
+
+```{r}
+cat('Prosječna ocjena ekstraverzije mladih ljudi iznosi ', mean(young$extraversion_score), '\n')
+cat('Prosječna ocjena ekstraverzije srednjih ljudi iznosi ', mean(middle$extraversion_score), '\n')
+cat('Prosječna ocjena ekstraverzije starijih ljudi iznosi ', mean(old$extraversion_score), '\n')
+```
+```{r}
+boxplot(young$extraversion_score, middle$extraversion_score, old$extraversion_score,
+        names = c('Young people extraversion score','Middle aged people extraversion score', 'Old people extraversion score'),
+        main = 'Boxplot of young, middle aged and old people extraversion score')
+```
+```{r}
+smoothScatter(bigFiveData$extraversion_score, bigFiveData$age, main = "Scatter plot for extraversion score and age") #graficki prikaz podataka 
+lines(bigFiveData$extraversion_score,fit.extraversion$fitted.values,col="red") #linija
+```
+
+
+UGODNOST
+
+```{r}
+cat('Prosječna ocjena ugodnosti mladih ljudi iznosi ', mean(young$agreeable_score), '\n')
+cat('Prosječna ocjena ugodnosti srednjih ljudi iznosi ', mean(middle$agreeable_score), '\n')
+cat('Prosječna ocjena ugodnosti starijih ljudi iznosi ', mean(old$agreeable_score), '\n')
+```
+```{r}
+boxplot(young$agreeable_score, middle$agreeable_score, old$agreeable_score,
+        names = c('Young people agreeable score','Middle aged people agreeable score', 'Old people agreeable score'),
+        main = 'Boxplot of young, middle aged and old people agreeable score')
+```
+```{r}
+smoothScatter(bigFiveData$agreeable_score, bigFiveData$age, main = "Scatter plot for agreeable score and age") #graficki prikaz podataka 
+lines(bigFiveData$agreeable_score,fit.agreeable$fitted.values,col="red") #linija
+```
+
+SAVJESNOST
+
+```{r}
+cat('Prosječna ocjena savjesnosti mladih ljudi iznosi ', mean(young$conscientiousness_score), '\n')
+cat('Prosječna ocjena savjesnosti srednjih ljudi iznosi ', mean(middle$conscientiousness_score), '\n')
+cat('Prosječna ocjena savjesnosti starijih ljudi iznosi ', mean(old$conscientiousness_score), '\n')
+```
+```{r}
+boxplot(young$conscientiousness_score, middle$conscientiousness_score, old$conscientiousness_score,
+        names = c('Young people conscientiousness score','Middle aged people conscientiousness score', 'Old people conscientiousness score'),
+        main = 'Boxplot of young, middle aged and old people conscientiousness score')
+```
+```{r}
+smoothScatter(bigFiveData$conscientiousness_score, bigFiveData$age, main = "Scatter plot for conscientiousness score and age") #graficki prikaz podataka 
+lines(bigFiveData$conscientiousness_score,fit.conscientiousness$fitted.values,col="red") #linija
+```
+
+NEUROTICIZAM
+
+```{r}
+cat('Prosječna ocjena neuroticizma mladih ljudi iznosi ', mean(young$neuroticism_score), '\n')
+cat('Prosječna ocjena neuroticizma srednjih ljudi iznosi ', mean(middle$neuroticism_score), '\n')
+cat('Prosječna ocjena neuroticizma starijih ljudi iznosi ', mean(old$neuroticism_score), '\n')
+```
+```{r}
+boxplot(young$neuroticism_score, middle$neuroticism_score, old$neuroticism_score,
+        names = c('Young people neuroticism score','Middle aged people neuroticism score', 'Old people neuroticism score'),
+        main = 'Boxplot of young, middle aged and old people neuroticism score')
+```
+```{r}
+smoothScatter(bigFiveData$neuroticism_score, bigFiveData$age, main = "Scatter plot for neuroticism score and age") #graficki prikaz podataka 
+lines(bigFiveData$neuroticism_score,fit.neuroticism$fitted.values,col="red") #linija
+```
+
+OTVORENOST PREMA NOVIM ISKUSTVIMA
+
+```{r}
+cat('Prosječna ocjena otvorenosti mladih ljudi iznosi ', mean(young$openness_score), '\n')
+cat('Prosječna ocjena otvorenosti srednjih ljudi iznosi ', mean(middle$openness_score), '\n')
+cat('Prosječna ocjena otvorenosti starijih ljudi iznosi ', mean(old$openness_score), '\n')
+```
+```{r}
+boxplot(young$openness_score, middle$openness_score, old$openness_score,
+        names = c('Young people openness score','Middle aged people openness score', 'Old people openness score'),
+        main = 'Boxplot of young, middle aged and old people openness score')
+```
+```{r}
+smoothScatter(bigFiveData$openness_score, bigFiveData$age,main = 'Scatter plot for openness scores and age') #graficki prikaz podataka 
+lines(bigFiveData$openness_score,fit.opennes$fitted.values,col="red") #linija
+```
+
+Nakon što smo pogledali prosjeke te napravili box plotove i scatter plotove s regresijskim linijama, bez računanja testova za svaki faktor posebno, možemo vidjeti da je savjesnost najviše ovisna o dobi.
+Zbog toga sada biramo savjesnost i radimo daljnja testiranja za dob vs savjesnost ispitanika.
+
+Prije svakog testiranja gdje pretpostavljamo normalnost, moramo ju pokazati. Za početak ćemo prikazati podatke u histogramu.
+
+Histogram za savjesnost mlađih:
+
+```{r}
+hist(young$conscientiousness_score, main='Younger people conscientiousness score', xlab='Conscientiousness score', ylab='Frequency')
+```
+
+Histogram za savjesnost srednjh:
+
+```{r}
+hist(middle$conscientiousness_score, main='Middle aged people conscientiousness score', xlab='Conscientiousness score', ylab='Frequency')
+```
+
+Histogram za savjesnost starijih:
+
+```{r}
+hist(old$conscientiousness_score, main='Older people conscientiousness score', xlab='Conscientiousness score', ylab='Frequency')
+```
+
+Prije linearne regresiju trebamo provjeriti normalnost reziduala (razlika) i homogenost varijance.
+
+Normalnost reziduala provjerit ćemo grafički, pomoću Q-Q plota te statistički pomoću Kolmogorov-Smirnovljevog testa.
+
+```{r}
+selected.model = fit.conscientiousness
+#smoothScatter(selected.model$residuals)
+```
+
+Histogram:
+
+```{r}
+hist((selected.model$residuals))
+```
+```{r}
+hist(rstandard(selected.model))
+```
+
+Q-Q plot:
+
+```{r}
+ #q-q plot reziduala s linijom normalne distribucije
+qqnorm(rstandard(selected.model)) 
+qqline(rstandard(selected.model))
+```
+
+Na danom Q-Q plotu i na histogramima vidimo da reziduali nisu normalno distribuirani.
+Mičemo outliere gledajući varijablu godine i varijablu savjesnosti da vidimo dobivamo li "normalnije" rezultate...
+
+```{r}
+Q1 <- quantile(bigFiveData$conscientiousness_score, .25)
+Q3 <- quantile(bigFiveData$conscientiousness_score, .75)
+IQR <- IQR(bigFiveData$conscientiousness_score)
+#Q1 <- quantile(bigFiveData$age, .25)
+#Q3 <- quantile(bigFiveData$age, .75)
+#IQR <- IQR(bigFiveData$age)
+bigFiveDatatemp <- subset(bigFiveData, bigFiveData$conscientiousness_score> (Q1 - 1.5*IQR) & bigFiveData$conscientiousness_score< (Q3 + 1.5*IQR))
+Q1 <- quantile(bigFiveDatatemp$age, .25)
+Q3 <- quantile(bigFiveDatatemp$age, .75)
+IQR <- IQR(bigFiveDatatemp$age)
+bigFiveDataNew <- subset(bigFiveDatatemp, bigFiveDatatemp$age> (Q1 - 1.5*IQR) & bigFiveDatatemp$age< (Q3 + 1.5*IQR))
+dim(bigFiveDataNew)
+```
+
+Na temelju danih rezultata usporedbe godina sa svakim od 5 faktora, zaključili smo da ni za jedan od njih nema smisla raditi linearnu regresiju. Izabrali smo naizgled najlogičniji, ali prema dobivenom Q-Q plotu je očito da podaci nisu normalno distribuirani, pa ćemo probati nešto novo. Nažalost ovaj test je "propao".
+
+Probat ćemo za početak obrnuto. Gledat ćemo kako savjesnot ispitanika ovisi o dobi. (do sada smo gledali kako dob ovisi o savjesnosti i ostalim faktorima)
+
+Zavisna varijabla: Y = conscientiousness_score
+Nezavisna varijabla: X = age
+
+Radimo novi linearni model:
+
+```{r}
+fit.conscientiousness_age_new = lm(conscientiousness_score~age, data = bigFiveDataNew)
+fit.conscientiousness_age = lm(conscientiousness_score~age, data = bigFiveData)
+```
+
+Smooth Scatter plot za ovisnost savjesnosti o dobi:
+
+```{r}
+smoothScatter(bigFiveData$age, bigFiveData$conscientiousness_score, main = "Scatter plot for conscientiousness score and age") #graficki prikaz podataka 
+lines(bigFiveData$age,fit.conscientiousness_age$fitted.values,col="red") #linija
+```
+
+Sada radimo Q-Q plot za taj model:
+
+```{r}
+qqnorm(rstandard(fit.conscientiousness_age))
+qqline(rstandard(fit.conscientiousness_age))
+```
+
+Q-Q plot daje dobre rezultate za razliku od prethodnog. Možemo naslutiti da se radi o nomalno distribuiranim podacima.
+Osim Q-Q plota, možemo napraviti i histogram za reziduale da grafički pokazećemo normalnost:
+
+```{r}
+hist((fit.conscientiousness_age$residuals))
+```
+```{r}
+hist(rstandard(fit.conscientiousness_age))
+```
+
+S obzirom da Q-Q plot i histogrami nisu dovoljni za pokazivanje normalnosti, sada ćemo na danom modelu provesti statističke testove (KS i Lilliefors)
+
+Kolmogorov Smirnovljev test:
+
+```{r}
+ks.test(rstandard(fit.conscientiousness_age),"pnorm")
+```
+```{r}
+require(nortest)
+```
+
+Lilliefors test:
+
+```{r}
+lillie.test(rstandard(fit.conscientiousness_age))
+```
+
+Ovim statističkim testovima pokazali smo normalnost pa možemo koristiti te podatke i linearni model u daljnjem razmatranju. 
+
+Sada ćemo vidjeti kvalitetu prilagodbe modela podacima:
+```{r}
+summary(fit.conscientiousness_age)
+```
+
+Možemo za kraj, nakon ovih testova pogledati i korelaciju među tim varijablama da potvrdimo da nisu linearno povezane.
+
+```{r}
+cor(bigFiveDataNew$age, bigFiveDataNew$conscientiousness_score)
+cor.test(bigFiveDataNew$conscientiousness_score, bigFiveDataNew$age)
+```
+
+Iz navedenih rezultata testa, po R-squared koji iznosi 6 % (u ovom slučaju kada smo makli outliere i po dobi i po savjesnosti). Inače, da bi model za linearnu regresiju bio dobar, za neke socijalne ekspermente, zadovoljili bi se i s 30-40% sličnosti, ali 6 % je jako malo.
+
+Nakon ovog neuspješnog testa, tj. odbijanja početne hipoteze da možemo savjesnost predvidjeti pomoću dobi ili obrnuto, u igru ćemo probati ubaciti još neki regresor o kojem ovisi savjesnost, te time pokušati pokazati linearnu povezanost.
+
+Prije nego odlučimo koje ćemo varijable uzeti za regresore, pogledat ćemo koefijcijente koreliranosti.
+Inače, za višestruku regresiju ne smijemo koristiti varijable koje su jako korelirane jer mogu stvoriti probleme u interpretaciji rezultata.
+
+Koeficijent korelacije godina i spola:
+
+```{r}
+cor(bigFiveData$age, bigFiveData$sex)
+#cor.test(bigFiveData$age, bigFiveData$sex)
+```
+
+Vidimo da ove dvije varijable nisu korelirane, stoga ih možemo koristiti kao regresore u višestrukoj regresiji.
+
+Radimo novi linearni model.
+
+```{r}
+fit.conscientiousness_age_sex = lm(conscientiousness_score~age + sex, data = bigFiveData)
+```
+
+Rezultati provjere kvalitete modela:
+
+```{r}
+summary(fit.conscientiousness_age_sex)
+```
+
+Nakon što smo napravili par testova i vidjeli da je rezultat za R-squared malen što god uzeli, probat ćemo s nasumičnim manjim uzorkom, jer kod R-squared može biti problem velika količina podataka jer on gleda varijancu pogreške.
+Prvo pokušavamo za višestruku regresiju s godinama i spolom na jednoj, i savjesnošću na drugoj strani.
+
+```{r}
+fit.conscientiousness_age_sex_test = lm(conscientiousness_score~age + sex, data = sample_n(bigFiveData, 100))
+summary(fit.conscientiousness_age_sex_test)
+```
+
+Scatter plot navedenog primjera:
+
+```{r}
+plot(fit.conscientiousness_age_sex_test$fitted.values,fit.conscientiousness_age_sex_test$residuals)
+```
+
+Nakon toga probat ćemo početnu ideju, jednostavnu linearnu regresiju za godine vs savjesnost.
+
+```{r}
+fit.conscientiousness_random = lm(conscientiousness_score~age, data = sample_n(bigFiveData, 100))
+summary(fit.conscientiousness_random)
+```
+
+Scatter plot:
+
+```{r}
+plot(fit.conscientiousness_random$fitted.values,fit.conscientiousness_random$residuals)
+```
+
+U ovom slučaju promatrali smo uzorak od 100 i dobili smo da je R-squared 25% što je u slučaju promatranja ljudi i ljudskog ponašanja dobro, pa možemo zaključiti da je pretpostavka dobra i rezultat značajan.
+
+
+Na kraju cijelog testa, nakon što smo uglavnom grafički provjeravali ovisnosti svih faktora o godinama, napravili smo linearni model s godinama kao regresorom i koeficijentom savjesnosti kao nezavnisnom varijablom i dobili dobar rezultat.
+Možemo zaključiti da su "stariji ljudi više savjesni", što je donekle i logično jer čovjek odrastanjem postaje svjesniji svojih obveza i počinje biti odgovorniji prema njima.
+
